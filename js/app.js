@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
 //  CONFIG — Bunu Google Apps Script URL ilə dəyişdirin
 // ═══════════════════════════════════════
-const API_URL = localStorage.getItem('https://script.google.com/macros/s/AKfycbxo-VIjufnG8WlaOfY-ci3h53d7ws4ZmxNgGNzOdabQYMSro4J0Cqq03hQA5ifOJ5HrFg/exec') || '';
+const API_URL = localStorage.getItem('api_url') || 'https://script.google.com/macros/s/AKfycbxo-VIjufnG8WlaOfY-ci3h53d7ws4ZmxNgGNzOdabQYMSro4J0Cqq03hQA5ifOJ5HrFg/exec';
 
 // ═══════════════════════════════════════
 //  i18n — Dil dəstəyi
