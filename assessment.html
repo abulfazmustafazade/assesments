@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qiymətləndirmə</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-header">
+    <div class="header-inner">
+      <a href="dashboard.html" class="btn btn-ghost" style="padding:0.375rem;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" transform="scale(0.67)"/></svg>
+        <span data-i18n="assess.back">Komandaya qayıt</span>
+      </a>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-sec" id="counter"></span>
+        <button class="toggle-btn theme-btn" onclick="toggleTheme()"></button>
+        <button class="toggle-btn lang-btn" data-lang="az" onclick="setLang('az');renderAll();">AZ</button>
+        <button class="toggle-btn lang-btn" data-lang="en" onclick="setLang('en');renderAll();">EN</button>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="topBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="container">
+    <div class="card mb-6" id="empCard">
+      <div class="flex items-center gap-3">
+        <div class="avatar avatar-lg" id="empAvatar"></div>
+        <div>
+          <div class="font-medium" id="empName"></div>
+          <div class="text-sm text-sec" id="empDetails"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading" class="text-center" style="padding:3rem;">
+      <div class="spinner" style="margin:0 auto;"></div>
+    </div>
+
+    <div id="questionsList"></div>
+
+    <button class="btn btn-p btn-block mt-8" id="submitBtn" onclick="handleSubmit()" disabled>
+      <span data-i18n="assess.fill">Bütün suallara cavab verin</span>
+    </button>
+  </div>
+
+  <div id="toast" class="toast hide"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage();
+    const session = requireAuth();
+    const empIdCode = new URLSearchParams(window.location.search).get('id');
+    if (!empIdCode) window.location.href = 'dashboard.html';
+
+    let questions = [];
+    let answers = {};
+    let employee = null;
+
+    if (session) loadData();
+
+    async function loadData() {
+      try {
+        const [teamData, qData, aData] = await Promise.all([
+          api('team', { email: session.email }),
+          api('questions'),
+          api('answers', { evaluatorEmail: session.email, employeeIdCode: empIdCode })
+        ]);
+
+        const team = teamData.team || [];
+        employee = team.find(e => e.idCode === empIdCode);
+        if (!employee) return window.location.href = 'dashboard.html';
+
+        questions = qData.questions || [];
+
+        // Load existing answers
+        if (aData.answers) {
+          aData.answers.forEach(a => { answers[a.questionId] = a.answerIndex; });
+        }
+
+        document.getElementById('loading').classList.add('hidden');
+        renderAll();
+      } catch (e) {
+        document.getElementById('loading').innerHTML = `<div class="text-sm text-sec">${t('assess.err')}: ${e.message}</div>`;
+      }
+    }
+
+    function renderAll() {
+      if (!employee) return;
+      const lang = getLang();
+
+      document.getElementById('empAvatar').textContent = getInitials(employee.fullName);
+      document.getElementById('empName').textContent = employee.fullName;
+      document.getElementById('empDetails').textContent =
+        (employee.jobTitle || '—') + ' · ' + (employee.department || '—');
+
+      renderQuestions();
+      updateProgress();
+    }
+
+    function renderQuestions() {
+      const lang = getLang();
+      document.getElementById('questionsList').innerHTML = questions.map((q, i) => {
+        const qText = lang === 'en' && q.textEN ? q.textEN : q.textAZ;
+        const cat = lang === 'en' && q.categoryEN ? q.categoryEN : q.categoryAZ;
+        const opts = lang === 'en' && q.opts_en ? q.opts_en : q.opts_az;
+
+        return `
+          <div class="card" style="margin-bottom:0.75rem;">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-xs text-sec font-medium">${t('assess.q')} ${i + 1} / ${questions.length}</span>
+              ${cat ? `<span class="badge badge-em">${cat}</span>` : ''}
+            </div>
+            <div class="text-sm font-medium mb-4">${qText}</div>
+            <div class="opt-group">
+              ${opts.map((opt, oi) => `
+                <div class="opt-item ${answers[q.id] === oi ? 'sel' : ''}"
+                     onclick="pick(${q.id}, ${oi}, this)">
+                  <div class="rdot"><div class="rdot-in"></div></div>
+                  <span>${opt}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function pick(qId, optIdx, el) {
+      answers[qId] = optIdx;
+      el.parentElement.querySelectorAll('.opt-item').forEach(s => s.classList.remove('sel'));
+      el.classList.add('sel');
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const total = questions.length;
+      const done = Object.keys(answers).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+
+      document.getElementById('topBar').style.width = pct + '%';
+      document.getElementById('counter').textContent = `${done} / ${total} ${t('assess.answered')}`;
+
+      const btn = document.getElementById('submitBtn');
+      if (done === total && total > 0) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>${t('assess.submit')}</span>`;
+      } else {
+        btn.disabled = true;
+        btn.innerHTML = `<span>${total - done} ${t('assess.remaining')}</span>`;
+      }
+    }
+
+    async function handleSubmit() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> ${t('assess.sending')}`;
+
+      try {
+        const payload = {
+          evaluatorEmail: session.email,
+          evaluatorName: session.name,
+          employeeIdCode: employee.idCode,
+          employeeName: employee.fullName,
+          department: employee.department || '',
+          answers: JSON.stringify(
+            Object.entries(answers).map(([qId, aIdx]) => ({ qId: parseInt(qId), aIdx }))
+          )
+        };
+
+        const res = await api('submit', payload);
+
+        if (res.success) {
+          showToast(t('assess.success'));
+          setTimeout(() => window.location.href = 'dashboard.html', 1200);
+        } else {
+          showToast(res.error || t('assess.err'), true);
+          btn.disabled = false;
+          btn.innerHTML = `<span>${t('assess.submit')}</span>`;
+        }
+      } catch (e) {
+        showToast(t('assess.err'), true);
+        btn.disabled = false;
+        btn.innerHTML = `<span>${t('assess.submit')}</span>`;
+      }
+    }
+  </script>
+</body>
+</html>

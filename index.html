@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Potensial Qiymətləndirmə</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Top bar with theme + lang -->
+  <div style="position:fixed; top:0; right:0; padding:1rem; display:flex; gap:6px; z-index:20;">
+    <button class="toggle-btn theme-btn" onclick="toggleTheme()"></button>
+    <button class="toggle-btn lang-btn" data-lang="az" onclick="setLang('az')">AZ</button>
+    <button class="toggle-btn lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+  </div>
+
+  <div class="center-page">
+    <div class="login-card">
+      <div class="icon-box icon-box-dark mb-6">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <h1 class="page-title mb-1" data-i18n="login.title">Rəhbər girişi</h1>
+      <p class="text-sm text-sec mb-8" data-i18n="login.subtitle">Email və ID kodunuzu daxil edin</p>
+
+      <div id="error" class="alert alert-warn hidden mb-4">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="errorText"></span>
+      </div>
+
+      <label class="field">
+        <span class="fl" data-i18n="login.email">Korporativ email</span>
+        <input type="email" id="email" data-i18n-ph="login.email.ph" autocomplete="email">
+      </label>
+
+      <label class="field">
+        <span class="fl" data-i18n="login.code">ID kod</span>
+        <input type="text" id="idCode" data-i18n-ph="login.code.ph" autocomplete="off" maxlength="10">
+      </label>
+
+      <button class="btn btn-p btn-block mt-2" id="loginBtn" onclick="handleLogin()">
+        <span data-i18n="login.btn">Daxil ol</span>
+      </button>
+
+      <p class="text-xs text-hint text-center mt-6" data-i18n="login.hint">ID kodunuzu bilmirsinizsə HR şöbəsinə müraciət edin</p>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage();
+
+    // Redirect if already logged in
+    if (getSession()) window.location.href = 'dashboard.html';
+
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const idCode = document.getElementById('idCode').value.trim();
+      const errEl = document.getElementById('error');
+      const errText = document.getElementById('errorText');
+      const btn = document.getElementById('loginBtn');
+
+      if (!email || !idCode) {
+        errEl.classList.remove('hidden');
+        errText.textContent = t('login.err.empty');
+        return;
+      }
+
+      if (!API_URL) {
+        errEl.classList.remove('hidden');
+        errText.textContent = t('login.err.noapi');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>';
+
+      try {
+        const data = await api('login', { email, idCode });
+
+        if (data.success) {
+          setSession({ email: data.email, name: data.name });
+          window.location.href = 'dashboard.html';
+        } else {
+          errEl.classList.remove('hidden');
+          if (data.error === 'NOT_MANAGER') errText.textContent = t('login.err.notmgr');
+          else errText.textContent = t('login.err.invalid');
+        }
+      } catch (e) {
+        errEl.classList.remove('hidden');
+        errText.textContent = e.message === 'API_NOT_SET' ? t('login.err.noapi') : t('login.err.server');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = `<span data-i18n="login.btn">${t('login.btn')}</span>`;
+    }
+
+    document.getElementById('idCode').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+  </script>
+</body>
+</html>

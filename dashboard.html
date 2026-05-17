@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Komandam</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-header">
+    <div class="header-inner">
+      <div class="header-left">
+        <div>
+          <div class="text-sm font-medium" id="headerName"></div>
+          <div class="text-xs text-sec" id="headerEmail"></div>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="toggle-btn theme-btn" onclick="toggleTheme()"></button>
+        <button class="toggle-btn lang-btn" data-lang="az" onclick="setLang('az');renderTeam();">AZ</button>
+        <button class="toggle-btn lang-btn" data-lang="en" onclick="setLang('en');renderTeam();">EN</button>
+        <button class="btn btn-ghost" onclick="handleLogout()" style="margin-left:4px;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" transform="scale(0.67)"/><polyline points="16 17 21 12 16 7" transform="scale(0.67)"/><line x1="21" y1="12" x2="9" y2="12" transform="scale(0.67)"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="topBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="container">
+    <div class="card mb-6" id="progressCard">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <div class="text-sm font-medium" data-i18n="dash.progress">İrəliləyiş</div>
+          <div class="text-xs text-sec" id="progressText"></div>
+        </div>
+        <div style="font-size:1.5rem;font-weight:500;" id="progressPct">0%</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <div id="loading" class="text-center text-sec" style="padding:3rem;">
+      <div class="spinner mb-2" style="margin:0 auto;"></div>
+      <div class="text-sm" data-i18n="dash.loading">Komanda yüklənir...</div>
+    </div>
+
+    <div id="teamList"></div>
+
+    <div id="emptyState" class="card text-center hidden" style="padding:3rem;">
+      <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 0.75rem;color:var(--text-hint)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <div class="text-sm text-sec" data-i18n="dash.empty">Sizə tabe işçi tapılmadı</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hide"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage();
+    let team = [];
+    const session = requireAuth();
+
+    if (session) {
+      document.getElementById('headerName').textContent = session.name;
+      document.getElementById('headerEmail').textContent = session.email;
+      loadTeam();
+    }
+
+    async function loadTeam() {
+      try {
+        const data = await api('team', { email: session.email });
+        team = data.team || [];
+        document.getElementById('loading').classList.add('hidden');
+        renderTeam();
+      } catch (e) {
+        document.getElementById('loading').innerHTML = '<div class="text-sm text-sec">Xəta: ' + e.message + '</div>';
+      }
+    }
+
+    function renderTeam() {
+      const lang = getLang();
+      if (!team.length) {
+        document.getElementById('emptyState').classList.remove('hidden');
+        document.getElementById('progressCard').classList.add('hidden');
+        return;
+      }
+
+      const completed = team.filter(e => e.isComplete).length;
+      const pct = Math.round((completed / team.length) * 100);
+
+      document.getElementById('progressText').textContent = `${completed} / ${team.length} ${t('dash.evaluated')}`;
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('topBar').style.width = pct + '%';
+
+      document.getElementById('teamList').innerHTML = team.map(emp => `
+        <div class="team-item" onclick="go('${emp.idCode}')">
+          <div class="flex items-center gap-3">
+            <div class="avatar">${getInitials(emp.fullName)}</div>
+            <div>
+              <div class="text-sm font-medium">${emp.fullName}</div>
+              <div class="text-xs text-sec">${emp.jobTitle || '—'} · ${emp.department || '—'}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            ${emp.isComplete
+              ? `<span class="badge badge-em">${t('dash.completed')}</span>`
+              : `<span class="badge badge-gray">${t('dash.pending')}</span>`
+            }
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function go(idCode) {
+      window.location.href = 'assessment.html?id=' + encodeURIComponent(idCode);
+    }
+
+    function handleLogout() {
+      clearSession();
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
